@@ -1,0 +1,51 @@
+
+services:
+
+  # Vulnerable web application
+  juice-shop:
+    image: bkimminich/juice-shop
+    container_name: juice-shop
+    expose:
+      - "3000"
+    networks:
+      - waf-network
+    restart: unless-stopped
+
+  # NGINX + ModSecurity + OWASP CRS
+  waf:
+    image: owasp/modsecurity-crs:nginx
+    container_name: waf
+
+    depends_on:
+      - juice-shop
+
+    environment:
+      BACKEND: http://juice-shop:3000
+
+      # Start in monitoring mode
+      MODSEC_RULE_ENGINE: DetectionOnly
+
+      # Enable audit logging
+      MODSEC_AUDIT_ENGINE: On
+      MODSEC_AUDIT_LOG: /dev/stdout
+      MODSEC_AUDIT_LOG_FORMAT: JSON
+      MODSEC_AUDIT_LOG_TYPE: Serial
+
+      # Start with CRS paranoia level 1
+      BLOCKING_PARANOIA: "1"
+      DETECTION_PARANOIA: "1"
+
+    ports:
+      - "127.0.0.1:8080:8080"
+
+    volumes:
+      - ./waf/custom-rules.conf:/etc/modsecurity.d/custom-rules.conf:ro
+
+    networks:
+      - waf-network
+
+    restart: unless-stopped
+
+networks:
+  waf-network:
+    driver: bridge
